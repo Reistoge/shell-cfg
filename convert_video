@@ -1,0 +1,38 @@
+#!/bin/bash
+
+# Check for the correct number of arguments
+if [ "$#" -ne 2 ]; then
+    echo "Usage: $0 input_file output_file.mp4"
+    exit 1
+fi
+
+input_file="$1"
+output_file="$2"
+
+# 1. Safely get the exact video resolution using ffprobe
+resolution=$(ffprobe -v error -select_streams v:0 -show_entries stream=width,height -of csv=s=x:p=0 "$input_file")
+
+if [ -z "$resolution" ]; then
+    echo "Could not determine resolution for $input_file"
+    exit 1
+fi
+
+# Extract width and height
+WIDTH=$(echo "$resolution" | cut -d'x' -f1)
+HEIGHT=$(echo "$resolution" | cut -d'x' -f2)
+
+# Adjust the width and height to be even (H.264 requires even dimensions)
+WIDTH=$((WIDTH - WIDTH % 2))
+HEIGHT=$((HEIGHT - HEIGHT % 2))
+
+# 2. Run ffmpeg with safety flags for WebM to MP4 conversions
+ffmpeg -i "$input_file" \
+    -vf "scale=$WIDTH:$HEIGHT" \
+    -c:v libx264 \
+    -crf 23 \
+    -preset fast \
+    -vsync vfr \
+    -pix_fmt yuv420p \
+    "$output_file"
+
+echo "Conversion completed: $output_file"
